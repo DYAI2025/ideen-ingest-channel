@@ -41,9 +41,18 @@ var hopByHopHeaders = map[string]struct{}{
 }
 
 func (b *Broker) ServeWebUI(port int) error {
+	bindHost := strings.TrimSpace(os.Getenv("WUPHF_WEB_BIND_HOST"))
+	if bindHost == "" {
+		bindHost = "127.0.0.1"
+	}
+	allowRemote := strings.EqualFold(strings.TrimSpace(os.Getenv("WUPHF_ALLOW_REMOTE_WEBUI")), "1") ||
+		strings.EqualFold(strings.TrimSpace(os.Getenv("WUPHF_ALLOW_REMOTE_WEBUI")), "true")
 	b.webUIOrigins = []string{
 		fmt.Sprintf("http://localhost:%d", port),
 		fmt.Sprintf("http://127.0.0.1:%d", port),
+	}
+	if allowRemote {
+		b.webUIOrigins = append(b.webUIOrigins, fmt.Sprintf("http://%s:%d", bindHost, port))
 	}
 
 	// Resolution order for the web UI assets:
@@ -79,19 +88,19 @@ func (b *Broker) ServeWebUI(port int) error {
 	// Bearer token server-side, so without a Host/RemoteAddr check, a DNS-rebinding
 	// attack against an attacker-controlled hostname that resolves to 127.0.0.1
 	// would ride the token and control the entire office.
-	mux.Handle("/api/share/status", webUIRebindGuard(http.HandlerFunc(b.handleWebShareStatus)))
-	mux.Handle("/api/share/start", webUIRebindGuard(http.HandlerFunc(b.handleWebShareStart)))
-	mux.Handle("/api/share/stop", webUIRebindGuard(http.HandlerFunc(b.handleWebShareStop)))
-	mux.Handle("/api/share/tunnel/status", webUIRebindGuard(http.HandlerFunc(b.handleWebTunnelStatus)))
-	mux.Handle("/api/share/tunnel/start", webUIRebindGuard(http.HandlerFunc(b.handleWebTunnelStart)))
-	mux.Handle("/api/share/tunnel/stop", webUIRebindGuard(http.HandlerFunc(b.handleWebTunnelStop)))
-	mux.Handle("/api/broker/restart", webUIRebindGuard(http.HandlerFunc(b.handleWebBrokerRestart)))
-	mux.Handle("/api/", webUIRebindGuard(b.webUIProxyHandler(brokerURL, "/api")))
-	mux.Handle("/onboarding/", webUIRebindGuard(b.webUIProxyHandler(brokerURL, "")))
+	mux.Handle("/api/share/status", webUIRebindGuard(allowRemote, http.HandlerFunc(b.handleWebShareStatus)))
+	mux.Handle("/api/share/start", webUIRebindGuard(allowRemote, http.HandlerFunc(b.handleWebShareStart)))
+	mux.Handle("/api/share/stop", webUIRebindGuard(allowRemote, http.HandlerFunc(b.handleWebShareStop)))
+	mux.Handle("/api/share/tunnel/status", webUIRebindGuard(allowRemote, http.HandlerFunc(b.handleWebTunnelStatus)))
+	mux.Handle("/api/share/tunnel/start", webUIRebindGuard(allowRemote, http.HandlerFunc(b.handleWebTunnelStart)))
+	mux.Handle("/api/share/tunnel/stop", webUIRebindGuard(allowRemote, http.HandlerFunc(b.handleWebTunnelStop)))
+	mux.Handle("/api/broker/restart", webUIRebindGuard(allowRemote, http.HandlerFunc(b.handleWebBrokerRestart)))
+	mux.Handle("/api/", webUIRebindGuard(allowRemote, b.webUIProxyHandler(brokerURL, "/api")))
+	mux.Handle("/onboarding/", webUIRebindGuard(allowRemote, b.webUIProxyHandler(brokerURL, "")))
 	// Token endpoint — no auth needed, but we require a same-origin loopback request.
 	// Otherwise this endpoint leaks the broker bearer to any browser page that
 	// can reach the web UI port via DNS rebinding.
-	mux.Handle("/api-token", webUIRebindGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api-token", webUIRebindGuard(allowRemote, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"token":      b.token,
@@ -117,7 +126,7 @@ func (b *Broker) ServeWebUI(port int) error {
 	))
 
 	mux.Handle("/", cacheControlMiddleware(fileServer))
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	addr := fmt.Sprintf("%s:%d", bindHost, port)
 	// noctx: net.Listen is the blocking primitive; the lint rule is meant
 	// for HTTP clients. Use ListenConfig.Listen with a Background context
 	// so the linter's intent (no caller-controllable cancellation lost) is

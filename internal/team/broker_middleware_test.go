@@ -621,7 +621,7 @@ func TestHostHeaderIsLoopback(t *testing.T) {
 // isLoopbackRemote AND hostHeaderIsLoopback. Both must pass for the request
 // to reach the next handler. Either failing → 403.
 func TestWebUIRebindGuard(t *testing.T) {
-	guarded := webUIRebindGuard(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	guarded := webUIRebindGuard(false, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("reached"))
 	}))
