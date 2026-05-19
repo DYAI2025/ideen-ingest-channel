@@ -365,8 +365,12 @@ func hostHeaderIsLoopback(r *http.Request) bool {
 // is not a recognized localhost form. Applied on the web UI mux because that
 // mux auto-attaches the broker's Bearer token on forwarded requests; without
 // this gate, a malicious website can use DNS rebinding to ride the token.
-func webUIRebindGuard(next http.Handler) http.Handler {
+func webUIRebindGuard(allowRemote bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if allowRemote {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if !isLoopbackRemote(r) || !hostHeaderIsLoopback(r) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
