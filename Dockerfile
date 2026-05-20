@@ -20,7 +20,6 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 ENV PORT=7891 \
     WUPHF_NO_NEX=1 \
-    WUPHF_ALLOW_REMOTE_WEBUI=1 \
     WUPHF_WEB_BIND_HOST=0.0.0.0
 EXPOSE 7891
 COPY --from=go-build /usr/local/bin/wuphf /usr/local/bin/wuphf
